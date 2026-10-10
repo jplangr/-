@@ -58,6 +58,22 @@ select,input{font:500 16px var(--body);color:var(--fg);background:var(--surface)
 .group:first-child{border-top:0}
 .group .who{display:flex;flex-wrap:wrap;gap:6px}
 .who span{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:14px}
+.tblwrap{overflow-x:auto}
+table.rep{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.rep th,.rep td{padding:8px 12px;border-top:1px solid var(--line);text-align:left}
+.rep thead th{border-top:0;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+.rep th.r,.rep td.n{text-align:right}
+.rep td.n{font:600 15px var(--mono)}
+.rep td.y{color:var(--accent)} .rep td.t{color:var(--muted);font-weight:500}
+.rep td.z{color:var(--muted);font-weight:500}
+.rep tr.tot td{background:var(--accent-soft);font-weight:700}
+.rep .td{color:var(--muted);font-size:12px}
+.up{color:#c55a11} .down{color:#2e75b6}
+h2.sub{font:600 18px var(--display);margin:8px 0 0}
+.pend{color:#9a6b00;font-weight:600}
+.fer{display:flex;justify-content:space-between;gap:10px;padding:9px 14px;border-top:1px solid var(--line)}
+.fer:first-child{border-top:0}
+.fer b.ok{color:#2e7d32} .fer b.no{color:var(--muted)} .fer b.pe{color:#9a6b00}
 .empty{padding:20px 14px;color:var(--muted)}
 .note{font-size:13px;color:var(--muted)}
 @media (max-width:480px){.row{grid-template-columns:96px 1fr}}
@@ -77,6 +93,7 @@ select,input{font:500 16px var(--body);color:var(--fg);background:var(--surface)
     <button role="tab" id="t-pessoa" data-v="pessoa">Por pessoa</button>
     <button role="tab" id="t-dia" data-v="dia">Por dia</button>
     <button role="tab" id="t-local" data-v="local">Por local</button>
+    <button role="tab" id="t-report" data-v="report">Report</button>
   </div>
 
   <div class="ctl"><label for="selMes">Mês<select id="selMes"></select></label></div>
@@ -98,7 +115,16 @@ select,input{font:500 16px var(--body);color:var(--fg);background:var(--surface)
     <div class="list" id="listLocal"></div>
   </section>
 
-  <p class="note">Dados da planilha oficial de contagem. Turno da noite: HM NOITE e PA 18-23H. Em caso de divergência, vale a planilha oficial.</p>
+  <section id="v-report" hidden>
+    <div class="ctl"><label for="selRes">Residente<select id="selRes"></select></label></div>
+    <div class="stats" id="statsRep"></div>
+    <div class="list"><div class="tblwrap"><table class="rep" id="tblRep"></table></div></div>
+    <h2 class="sub">Feriados (regra 7)</h2>
+    <div class="list" id="ferRep"></div>
+    <p class="note" id="noteRep"></p>
+  </section>
+
+  <p class="note">Escala realizada: escala fixa oficial + alterações registradas na planilha. Turno da noite: HM NOITE e PA 18-23H. Em caso de divergência, vale a planilha oficial.</p>
 </div>
 
 <script>
@@ -122,6 +148,52 @@ const byKey=new Map(ROWS.map(r=>[r[0]+"|"+r[1],r]));
 const label=v=>v==="TRABALHA"?"Trabalha (feriado)":v==="FERIADO"?"Feriado":v==="OFF"?"Folga":v;
 const nchip=v=>v?`<span class="night"><em>Noite</em>${chip(v)}</span>`:"";
 const chip=v=>{if(!v)return '<span class="chip free">Livre</span>';const c=COLORS[v]||"var(--muted)";return `<span class="chip"><i style="background:${c}"></i>${esc(label(v))}</span>`};
+const USE_REAL=false;
+const QMAP=new Map([].map(r=>[r[0]+"|"+r[1],r[2]]));
+const ALTMAP=new Map([].map(r=>[r[0]+"|"+r[1],r]));
+const GREP=[];
+const FEROF={"AMANDA PINATO|PROL 03-05/04": "", "AMANDA PINATO|PROL 01-03/05": "TRABALHOU", "AMANDA PINATO|PROL 04-06/06": "TRABALHOU", "AMANDA PINATO|PROL 05-07/09": "", "AMANDA PINATO|PROL 10-12/10": "TRABALHOU", "AMANDA PINATO|PROL 31/10-02/11": "TRABALHOU", "AMANDA PINATO|PROL 20-22/11": "TRABALHOU", "ANA BEATRIZ|PROL 03-05/04": "TRABALHOU", "ANA BEATRIZ|PROL 01-03/05": "TRABALHOU", "ANA BEATRIZ|PROL 04-06/06": "", "ANA BEATRIZ|PROL 05-07/09": "TRABALHOU", "ANA BEATRIZ|PROL 10-12/10": "", "ANA BEATRIZ|PROL 31/10-02/11": "", "ANA BEATRIZ|PROL 20-22/11": "TRABALHOU", "ANA LIGIA|PROL 03-05/04": "TRABALHOU", "ANA LIGIA|PROL 01-03/05": "TRABALHOU", "ANA LIGIA|PROL 04-06/06": "", "ANA LIGIA|PROL 05-07/09": "TRABALHOU", "ANA LIGIA|PROL 10-12/10": "TRABALHOU", "ANA LIGIA|PROL 31/10-02/11": "", "ANA LIGIA|PROL 20-22/11": "TRABALHOU", "BIA ZUCCOLO|PROL 03-05/04": "TRABALHOU", "BIA ZUCCOLO|PROL 01-03/05": "TRABALHOU", "BIA ZUCCOLO|PROL 04-06/06": "", "BIA ZUCCOLO|PROL 05-07/09": "TRABALHOU", "BIA ZUCCOLO|PROL 10-12/10": "", "BIA ZUCCOLO|PROL 31/10-02/11": "", "BIA ZUCCOLO|PROL 20-22/11": "FÉRIAS", "DAYANA|PROL 03-05/04": "TRABALHOU", "DAYANA|PROL 01-03/05": "", "DAYANA|PROL 04-06/06": "TRABALHOU", "DAYANA|PROL 05-07/09": "", "DAYANA|PROL 10-12/10": "TRABALHOU", "DAYANA|PROL 31/10-02/11": "TRABALHOU", "DAYANA|PROL 20-22/11": "TRABALHOU", "DEBORAH|PROL 03-05/04": "", "DEBORAH|PROL 01-03/05": "", "DEBORAH|PROL 04-06/06": "", "DEBORAH|PROL 05-07/09": "", "DEBORAH|PROL 10-12/10": "TRABALHOU", "DEBORAH|PROL 31/10-02/11": "TRABALHOU", "DEBORAH|PROL 20-22/11": "ABORL", "ELLEN|PROL 03-05/04": "TRABALHOU", "ELLEN|PROL 01-03/05": "", "ELLEN|PROL 04-06/06": "", "ELLEN|PROL 05-07/09": "", "ELLEN|PROL 10-12/10": "TRABALHOU", "ELLEN|PROL 31/10-02/11": "", "ELLEN|PROL 20-22/11": "TRABALHOU", "FERNANDA|PROL 03-05/04": "TRABALHOU", "FERNANDA|PROL 01-03/05": "", "FERNANDA|PROL 04-06/06": "TRABALHOU", "FERNANDA|PROL 05-07/09": "", "FERNANDA|PROL 10-12/10": "TRABALHOU", "FERNANDA|PROL 31/10-02/11": "TRABALHOU", "FERNANDA|PROL 20-22/11": "ABORL", "GABRIELA|PROL 03-05/04": "", "GABRIELA|PROL 01-03/05": "TRABALHOU", "GABRIELA|PROL 04-06/06": "TRABALHOU", "GABRIELA|PROL 05-07/09": "TRABALHOU", "GABRIELA|PROL 10-12/10": "", "GABRIELA|PROL 31/10-02/11": "", "GABRIELA|PROL 20-22/11": "TRABALHOU", "GHASSAN|PROL 03-05/04": "TRABALHOU", "GHASSAN|PROL 01-03/05": "TRABALHOU", "GHASSAN|PROL 04-06/06": "TRABALHOU", "GHASSAN|PROL 05-07/09": "TRABALHOU", "GHASSAN|PROL 10-12/10": "", "GHASSAN|PROL 31/10-02/11": "FÉRIAS", "GHASSAN|PROL 20-22/11": "TRABALHOU", "GI CASSIA|PROL 03-05/04": "TRABALHOU", "GI CASSIA|PROL 01-03/05": "TRABALHOU", "GI CASSIA|PROL 04-06/06": "FÉRIAS", "GI CASSIA|PROL 05-07/09": "TRABALHOU", "GI CASSIA|PROL 10-12/10": "", "GI CASSIA|PROL 31/10-02/11": "FÉRIAS", "GI CASSIA|PROL 20-22/11": "ABORL", "GI SAAD|PROL 03-05/04": "TRABALHOU", "GI SAAD|PROL 01-03/05": "TRABALHOU", "GI SAAD|PROL 04-06/06": "", "GI SAAD|PROL 05-07/09": "TRABALHOU", "GI SAAD|PROL 10-12/10": "", "GI SAAD|PROL 31/10-02/11": "", "GI SAAD|PROL 20-22/11": "TRABALHOU", "ISA ROMAGNOLI|PROL 03-05/04": "", "ISA ROMAGNOLI|PROL 01-03/05": "TRABALHOU", "ISA ROMAGNOLI|PROL 04-06/06": "TRABALHOU", "ISA ROMAGNOLI|PROL 05-07/09": "TRABALHOU", "ISA ROMAGNOLI|PROL 10-12/10": "", "ISA ROMAGNOLI|PROL 31/10-02/11": "TRABALHOU", "ISA ROMAGNOLI|PROL 20-22/11": "ABORL", "ISADORA|PROL 03-05/04": "", "ISADORA|PROL 01-03/05": "TRABALHOU", "ISADORA|PROL 04-06/06": "", "ISADORA|PROL 05-07/09": "", "ISADORA|PROL 10-12/10": "TRABALHOU", "ISADORA|PROL 31/10-02/11": "TRABALHOU", "ISADORA|PROL 20-22/11": "ABORL", "ISA JABRA|PROL 03-05/04": "TRABALHOU", "ISA JABRA|PROL 01-03/05": "TRABALHOU", "ISA JABRA|PROL 04-06/06": "FÉRIAS", "ISA JABRA|PROL 05-07/09": "TRABALHOU", "ISA JABRA|PROL 10-12/10": "TRABALHOU", "ISA JABRA|PROL 31/10-02/11": "", "ISA JABRA|PROL 20-22/11": "ABORL", "JESSICA PIOL|PROL 03-05/04": "", "JESSICA PIOL|PROL 01-03/05": "", "JESSICA PIOL|PROL 04-06/06": "", "JESSICA PIOL|PROL 05-07/09": "", "JESSICA PIOL|PROL 10-12/10": "TRABALHOU", "JESSICA PIOL|PROL 31/10-02/11": "TRABALHOU", "JESSICA PIOL|PROL 20-22/11": "TRABALHOU", "JESSICA VENSKE|PROL 03-05/04": "TRABALHOU", "JESSICA VENSKE|PROL 01-03/05": "", "JESSICA VENSKE|PROL 04-06/06": "TRABALHOU", "JESSICA VENSKE|PROL 05-07/09": "", "JESSICA VENSKE|PROL 10-12/10": "TRABALHOU", "JESSICA VENSKE|PROL 31/10-02/11": "TRABALHOU", "JESSICA VENSKE|PROL 20-22/11": "ABORL", "JOÃO FELIPE|PROL 03-05/04": "", "JOÃO FELIPE|PROL 01-03/05": "", "JOÃO FELIPE|PROL 04-06/06": "TRABALHOU", "JOÃO FELIPE|PROL 05-07/09": "", "JOÃO FELIPE|PROL 10-12/10": "TRABALHOU", "JOÃO FELIPE|PROL 31/10-02/11": "TRABALHOU", "JOÃO FELIPE|PROL 20-22/11": "FÉRIAS", "JOÃO VITOR|PROL 03-05/04": "TRABALHOU", "JOÃO VITOR|PROL 01-03/05": "", "JOÃO VITOR|PROL 04-06/06": "", "JOÃO VITOR|PROL 05-07/09": "TRABALHOU", "JOÃO VITOR|PROL 10-12/10": "", "JOÃO VITOR|PROL 31/10-02/11": "TRABALHOU", "JOÃO VITOR|PROL 20-22/11": "ABORL", "JULIA NEVES|PROL 03-05/04": "TRABALHOU", "JULIA NEVES|PROL 01-03/05": "TRABALHOU", "JULIA NEVES|PROL 04-06/06": "", "JULIA NEVES|PROL 05-07/09": "TRABALHOU", "JULIA NEVES|PROL 10-12/10": "", "JULIA NEVES|PROL 31/10-02/11": "", "JULIA NEVES|PROL 20-22/11": "TRABALHOU", "KATHARINA|PROL 03-05/04": "TRABALHOU", "KATHARINA|PROL 01-03/05": "TRABALHOU", "KATHARINA|PROL 04-06/06": "TRABALHOU", "KATHARINA|PROL 05-07/09": "TRABALHOU", "KATHARINA|PROL 10-12/10": "", "KATHARINA|PROL 31/10-02/11": "", "KATHARINA|PROL 20-22/11": "ABORL", "KATRINY|PROL 03-05/04": "TRABALHOU", "KATRINY|PROL 01-03/05": "TRABALHOU", "KATRINY|PROL 04-06/06": "", "KATRINY|PROL 05-07/09": "TRABALHOU", "KATRINY|PROL 10-12/10": "", "KATRINY|PROL 31/10-02/11": "", "KATRINY|PROL 20-22/11": "TRABALHOU", "LAIS|PROL 03-05/04": "TRABALHOU", "LAIS|PROL 01-03/05": "", "LAIS|PROL 04-06/06": "", "LAIS|PROL 05-07/09": "", "LAIS|PROL 10-12/10": "TRABALHOU", "LAIS|PROL 31/10-02/11": "TRABALHOU", "LAIS|PROL 20-22/11": "ABORL", "LIGIA|PROL 03-05/04": "TRABALHOU", "LIGIA|PROL 01-03/05": "", "LIGIA|PROL 04-06/06": "TRABALHOU", "LIGIA|PROL 05-07/09": "", "LIGIA|PROL 10-12/10": "TRABALHOU", "LIGIA|PROL 31/10-02/11": "TRABALHOU", "LIGIA|PROL 20-22/11": "ABORL", "LUCAS|PROL 03-05/04": "TRABALHOU", "LUCAS|PROL 01-03/05": "TRABALHOU", "LUCAS|PROL 04-06/06": "", "LUCAS|PROL 05-07/09": "TRABALHOU", "LUCAS|PROL 10-12/10": "", "LUCAS|PROL 31/10-02/11": "FÉRIAS", "LUCAS|PROL 20-22/11": "TRABALHOU", "MARCELA|PROL 03-05/04": "TRABALHOU", "MARCELA|PROL 01-03/05": "", "MARCELA|PROL 04-06/06": "TRABALHOU", "MARCELA|PROL 05-07/09": "", "MARCELA|PROL 10-12/10": "TRABALHOU", "MARCELA|PROL 31/10-02/11": "", "MARCELA|PROL 20-22/11": "ABORL", "MARCELO|PROL 03-05/04": "TRABALHOU", "MARCELO|PROL 01-03/05": "", "MARCELO|PROL 04-06/06": "", "MARCELO|PROL 05-07/09": "", "MARCELO|PROL 10-12/10": "TRABALHOU", "MARCELO|PROL 31/10-02/11": "TRABALHOU", "MARCELO|PROL 20-22/11": "ABORL", "NATALIA|PROL 03-05/04": "", "NATALIA|PROL 01-03/05": "TRABALHOU", "NATALIA|PROL 04-06/06": "TRABALHOU", "NATALIA|PROL 05-07/09": "TRABALHOU", "NATALIA|PROL 10-12/10": "", "NATALIA|PROL 31/10-02/11": "", "NATALIA|PROL 20-22/11": "TRABALHOU", "NYCOLLE|PROL 03-05/04": "TRABALHOU", "NYCOLLE|PROL 01-03/05": "", "NYCOLLE|PROL 04-06/06": "", "NYCOLLE|PROL 05-07/09": "TRABALHOU", "NYCOLLE|PROL 10-12/10": "TRABALHOU", "NYCOLLE|PROL 31/10-02/11": "TRABALHOU", "NYCOLLE|PROL 20-22/11": "FÉRIAS", "VICTÓRIA|PROL 03-05/04": "TRABALHOU", "VICTÓRIA|PROL 01-03/05": "", "VICTÓRIA|PROL 04-06/06": "TRABALHOU", "VICTÓRIA|PROL 05-07/09": "", "VICTÓRIA|PROL 10-12/10": "", "VICTÓRIA|PROL 31/10-02/11": "TRABALHOU", "VICTÓRIA|PROL 20-22/11": "TRABALHOU", "AMANDA PINATO|SOLTO 21/04": "TRABALHOU", "AMANDA PINATO|SOLTO 09/07": "", "ANA BEATRIZ|SOLTO 21/04": "", "ANA BEATRIZ|SOLTO 09/07": "", "ANA LIGIA|SOLTO 21/04": "", "ANA LIGIA|SOLTO 09/07": "", "BIA ZUCCOLO|SOLTO 21/04": "", "BIA ZUCCOLO|SOLTO 09/07": "", "DAYANA|SOLTO 21/04": "", "DAYANA|SOLTO 09/07": "", "DEBORAH|SOLTO 21/04": "", "DEBORAH|SOLTO 09/07": "TRABALHOU", "ELLEN|SOLTO 21/04": "", "ELLEN|SOLTO 09/07": "", "FERNANDA|SOLTO 21/04": "", "FERNANDA|SOLTO 09/07": "", "GABRIELA|SOLTO 21/04": "", "GABRIELA|SOLTO 09/07": "", "GHASSAN|SOLTO 21/04": "", "GHASSAN|SOLTO 09/07": "", "GI CASSIA|SOLTO 21/04": "", "GI CASSIA|SOLTO 09/07": "TRABALHOU", "GI SAAD|SOLTO 21/04": "", "GI SAAD|SOLTO 09/07": "TRABALHOU", "ISA ROMAGNOLI|SOLTO 21/04": "", "ISA ROMAGNOLI|SOLTO 09/07": "", "ISADORA|SOLTO 21/04": "TRABALHOU", "ISADORA|SOLTO 09/07": "TRABALHOU", "ISA JABRA|SOLTO 21/04": "", "ISA JABRA|SOLTO 09/07": "", "JESSICA PIOL|SOLTO 21/04": "TRABALHOU", "JESSICA PIOL|SOLTO 09/07": "", "JESSICA VENSKE|SOLTO 21/04": "", "JESSICA VENSKE|SOLTO 09/07": "", "JOÃO FELIPE|SOLTO 21/04": "TRABALHOU", "JOÃO FELIPE|SOLTO 09/07": "", "JOÃO VITOR|SOLTO 21/04": "", "JOÃO VITOR|SOLTO 09/07": "TRABALHOU", "JULIA NEVES|SOLTO 21/04": "", "JULIA NEVES|SOLTO 09/07": "", "KATHARINA|SOLTO 21/04": "TRABALHOU", "KATHARINA|SOLTO 09/07": "", "KATRINY|SOLTO 21/04": "", "KATRINY|SOLTO 09/07": "", "LAIS|SOLTO 21/04": "", "LAIS|SOLTO 09/07": "", "LIGIA|SOLTO 21/04": "TRABALHOU", "LIGIA|SOLTO 09/07": "", "LUCAS|SOLTO 21/04": "", "LUCAS|SOLTO 09/07": "", "MARCELA|SOLTO 21/04": "", "MARCELA|SOLTO 09/07": "", "MARCELO|SOLTO 21/04": "", "MARCELO|SOLTO 09/07": "", "NATALIA|SOLTO 21/04": "", "NATALIA|SOLTO 09/07": "", "NYCOLLE|SOLTO 21/04": "", "NYCOLLE|SOLTO 09/07": "TRABALHOU", "VICTÓRIA|SOLTO 21/04": "", "VICTÓRIA|SOLTO 09/07": ""};
+const BLOCOS=[{"id": "PROL 03-05/04", "t": "PROLONGADO", "d": ["2026-04-03", "2026-04-04", "2026-04-05"], "ref": "2026-04-03", "lab": "03/04 · 04/04 · 05/04"}, {"id": "PROL 01-03/05", "t": "PROLONGADO", "d": ["2026-05-01", "2026-05-02", "2026-05-03"], "ref": "2026-05-01", "lab": "01/05 · 02/05 · 03/05"}, {"id": "PROL 04-06/06", "t": "PROLONGADO", "d": ["2026-06-04", "2026-06-05", "2026-06-06", "2026-06-07"], "ref": "2026-06-04", "lab": "04/06 · 05/06 · 06/06 · 07/06"}, {"id": "PROL 05-07/09", "t": "PROLONGADO", "d": ["2026-09-05", "2026-09-06", "2026-09-07"], "ref": "2026-09-07", "lab": "05/09 · 06/09 · 07/09"}, {"id": "PROL 10-12/10", "t": "PROLONGADO", "d": ["2026-10-10", "2026-10-11", "2026-10-12"], "ref": "2026-10-12", "lab": "10/10 · 11/10 · 12/10"}, {"id": "PROL 31/10-02/11", "t": "PROLONGADO", "d": ["2026-10-31", "2026-11-01", "2026-11-02"], "ref": "2026-11-02", "lab": "31/10 · 01/11 · 02/11"}, {"id": "PROL 20-22/11", "t": "PROLONGADO", "d": ["2026-11-20", "2026-11-21", "2026-11-22"], "ref": "2026-11-20", "lab": "20/11 · 21/11 · 22/11"}, {"id": "PROL 25-27/12", "t": "PROLONGADO", "d": ["2026-12-25", "2026-12-26", "2026-12-27"], "ref": "2026-12-25", "lab": "25/12 · 26/12 · 27/12"}, {"id": "PROL 01-03/01", "t": "PROLONGADO", "d": ["2027-01-01", "2027-01-02", "2027-01-03"], "ref": "2027-01-01", "lab": "01/01 · 02/01 · 03/01"}, {"id": "PROL 23-25/01", "t": "PROLONGADO", "d": ["2027-01-23", "2027-01-24", "2027-01-25"], "ref": "2027-01-25", "lab": "23/01 · 24/01 · 25/01"}, {"id": "SOLTO 21/04", "t": "SOLTO", "d": ["2026-04-21"], "ref": "2026-04-21", "lab": "21/04"}, {"id": "SOLTO 09/07", "t": "SOLTO", "d": ["2026-07-09"], "ref": "2026-07-09", "lab": "09/07"}];
+const ALLHOLS=new Set(["2026-01-01", "2026-01-25", "2026-04-03", "2026-04-21", "2026-05-01", "2026-06-04", "2026-07-09", "2026-09-07", "2026-10-12", "2026-11-02", "2026-11-15", "2026-11-20", "2026-12-25", "2027-01-01", "2027-01-25"]);
+const CATMAP={"INSTITUTO":"INSTITUTO","CC":"CC","C.C ANDY":"CC ANDY","HM BELEM":"HM BELEM","HM NOITE":"HM NOITE","ARICA CICERO":"ARICA CICERO","ARICA JULIAO":"ARICA JULIAO","ARICANDUVA":"ARICANDUVA","ARICA":"ARICANDUVA","COBERTURA":"COBERTURA","ENFERMARIA":"ENFERMARIA","SOBREAVISO":"SOBREAVISO","UNEX":"UNEX","PA 08 - 18h":"PA 08-18h","PA 18 - 23H":"PA 18-23h","PA 08 - 20h":"PA 08-20h","OFF":"OFF"};
+const RCATS=[["INSTITUTO"],["CC"],["CC ANDY"],["HM BELEM"],["HM NOITE"],["ARICA CICERO"],["ARICA JULIAO"],["ARICANDUVA"],["COBERTURA"],["OFF"],["ENFERMARIA","DIA ÚTIL"],["ENFERMARIA","FDS"],["ENFERMARIA","FERIADO"],["SOBREAVISO"],["UNEX"],["PA 08-18h"],["PA 18-23h"],["PA 08-20h"]];
+const NOWORK=new Set(["FOLGA","OFF","FÉRIAS","FERIADO","ATESTADO","CONGRESSO","FORL","SEM ESCALA",""]);
+const tdia=d=>ALLHOLS.has(d)?"FERIADO":(isWk(d)?"FDS":"DIA ÚTIL");
+const catsOf=v=>!v?[]:v.split(" + ").map(p=>p.trim()).map(p=>(p==="OFF"||p.endsWith(" OFF"))?"OFF":(CATMAP[p]||null)).filter(Boolean);
+const keyOf=(c,d)=>c==="ENFERMARIA"?c+"|"+tdia(d):c;
+const YSTART="2026-03-03", ESCEND="2026-11-01";
+const GMAP=new Map(GREP.map(r=>[r[0],r]));
+const isReal=n=>USE_REAL&&n==="GABRIELA";
+function countPerson(n,a,b){const c=new Map();
+  if(isReal(n)){for(const r of GREP){if(r[0]<a||r[0]>b)continue;if(r[1]==="PENDENTE"||r[1]==="ESCOLHA O LOCAL")continue;for(const k of [r[3],r[4]]){if(!k)continue;const kk=k==="ENFERMARIA"?k+"|"+r[2]:k;c.set(kk,(c.get(kk)||0)+1)}}return c}
+  return countEsc(n,a,b)}
+function countEsc(n,a,b){const c=new Map();for(const d of DATES){if(d<a||d>b)continue;const key=d+"|"+n;let ks;if(QMAP.has(key))ks=catsOf(QMAP.get(key));else{const r=byKey.get(key);if(!r)continue;ks=[...catsOf(r[2]),...catsOf(r[3])]}for(const k of ks){const kk=keyOf(k,d);c.set(kk,(c.get(kk)||0)+1)}}return c}
+const monthEnd=m=>{const[y,mm]=m.split("-").map(Number);const d=new Date(y,mm,0);return m+"-"+String(d.getDate()).padStart(2,"0")};
+function worked(n,b){
+  if(isReal(n)){let pend=false;for(const d of b.d){const r=GMAP.get(d);if(!r)continue;if(r[1]==="PENDENTE"){pend=true;continue}if((r[5]&&!NOWORK.has(r[5])&&!r[5].endsWith(" OFF"))||r[6])return"TRABALHOU"}return pend?"PENDENTE":"NÃO TRABALHOU"}
+  const of=FEROF[n+"|"+b.id];if(of!==undefined)return of==="TRABALHOU"?"TRABALHOU":of==="FÉRIAS"?"FÉRIAS":of==="ABORL"?"CONGRESSO (ABORL)":"NÃO TRABALHOU";
+  if(b.d[0]>ESCEND)return"SEM ESCALA";
+  for(const d of b.d){const r=byKey.get(d+"|"+n);if(!r)continue;const v=r[2]||"";if((v&&!NOWORK.has(v)&&!v.endsWith(" OFF"))||r[3])return"TRABALHOU"}return"NÃO TRABALHOU"}
+function renderRep(){
+  const n=$("selRes").value;store.set("res",n);
+  const a=mes+"-01"<YSTART?YSTART:mes+"-01",b=monthEnd(mes);
+  const cm=countPerson(n,a,b),cy=countPerson(n,YSTART,b);
+  const tb=b<ESCEND?b:ESCEND;const tt=new Map();
+  for(const p of NAMES){for(const[k,v]of countEsc(p,YSTART,tb))tt.set(k,(tt.get(k)||0)+v)}
+  let body="",sm=0,sy=0,st=0;
+  for(const[c,td]of RCATS){const k=td?c+"|"+td:c;const m=cm.get(k)||0,y=cy.get(k)||0,t=(tt.get(k)||0)/NAMES.length;sm+=m;sy+=y;st+=t;
+    const cls=y>t*1.25&&y-t>=1?"up":(y<t*0.75&&t-y>=1?"down":"");
+    body+=`<tr><td><strong>${esc(c)}</strong>${td?` <span class="td">· ${esc(td.toLowerCase())}</span>`:""}</td><td class="n${m?"":" z"}">${m}</td><td class="n y ${cls}">${y}</td><td class="n t">${t.toFixed(1)}</td></tr>`}
+  $("tblRep").innerHTML=`<thead><tr><th>Local</th><th class="r">Mês</th><th class="r">Ano</th><th class="r">Média turma</th></tr></thead><tbody>${body}<tr class="tot"><td>Total</td><td class="n">${sm}</td><td class="n">${sy}</td><td class="n">${st.toFixed(1)}</td></tr></tbody>`;
+  let pend=0;if(isReal(n))for(const r of GREP){if(r[0]>=a&&r[0]<=b&&r[0]<=tk&&r[1]==="PENDENTE")pend++}
+  $("statsRep").innerHTML=`<span><b>${sm}</b>no mês</span><span><b>${sy}</b>acumulado no ano</span>`+(isReal(n)?`<span class="${pend?"pend":""}"><b>${pend}</b>dias pendentes</span>`:"");
+  let fh="",fy=0,sy2=0;
+  for(const bl of BLOCOS){const w=worked(n,bl);if(bl.ref<=b&&bl.ref>=YSTART&&w==="TRABALHOU"){bl.t==="PROLONGADO"?fy++:sy2++}
+    if(bl.ref>=a&&bl.ref<=b)fh+=`<div class="fer"><span>${bl.t==="PROLONGADO"?"Prolongado":"Solto"} · ${bl.lab}</span><b class="${w==="TRABALHOU"?"ok":w==="PENDENTE"?"pe":"no"}">${w.charAt(0)+w.slice(1).toLowerCase()}</b></div>`}
+  fh=(fh||'<div class="fer"><span class="note">Nenhum feriado neste mês.</span></div>')+`<div class="fer"><span>No ano: prolongados / soltos trabalhados</span><b>${fy} / ${sy2}</b></div>`;
+  $("ferRep").innerHTML=fh;
+  $("noteRep").textContent="Base: escala realizada (escala fixa + alterações registradas), com a regra 1 (troca de plantão conta pela fixa, exceto fins de semana de mar–mai). "+"Ano = desde 03/03/2026. Média turma = média dos "+NAMES.length+" residentes pela escala oficial. Laranja = bem acima da média; azul = bem abaixo.";
+}
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 
 // Pessoa
@@ -138,7 +210,7 @@ function renderPessoa(){
       const a=(d===MD()[0])?pd(d):monday;
       html+=`<div class="weekhead">Semana de ${String(a.getDate()).padStart(2,"0")}/${String(a.getMonth()+1).padStart(2,"0")} a ${String(sun.getDate()).padStart(2,"0")}/${String(sun.getMonth()+1).padStart(2,"0")}</div>`;lastWeek=wkey}
     if(nv)noit++;if(v==="FÉRIAS")fer++;else if(v&&!["FERIADO","OFF","CONGRESSO"].includes(v)){plant++;if(wk)fds++}
-    html+=`<div class="row${wk?" wk":""}"><span class="dt"><strong>${fmt(d)}</strong> ${WD[g]}</span><span>${(v||!nv)?chip(v):""}${nchip(nv)}${HOLS.has(d)?'<span class="tag">Feriado</span>':""}</span></div>`;
+    html+=`<div class="row${wk?" wk":""}"><span class="dt"><strong>${fmt(d)}</strong> ${WD[g]}</span><span>${(v||!nv)?chip(v):""}${nchip(nv)}${ALTMAP.has(d+"|"+n)?`<span class="tag">alterado · era ${esc(ALTMAP.get(d+"|"+n)[2]||"—")}</span>`:""}${HOLS.has(d)?'<span class="tag">Feriado</span>':""}</span></div>`;
   }
   $("listPessoa").innerHTML=html;
   $("statsPessoa").innerHTML=`<span><b>${plant}</b>diurnos</span><span><b>${noit}</b>noturnos</span><span><b>${fds}</b>em fins de semana</span><span><b>${fer}</b>dias de férias</span>`;
@@ -192,7 +264,7 @@ $("selLocal").addEventListener("change",renderLocal);
 
 // Tabs
 function show(v){
-  for(const k of ["pessoa","dia","local"]){$("v-"+k).hidden=k!==v;$("t-"+k).setAttribute("aria-selected",k===v)}
+  for(const k of ["pessoa","dia","local","report"]){$("v-"+k).hidden=k!==v;$("t-"+k).setAttribute("aria-selected",k===v)}
   store.set("aba",v);
 }
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(b)show(b.dataset.v)});
@@ -202,16 +274,19 @@ const today=new Date();const tk=today.getFullYear()+"-"+String(today.getMonth()+
 $("selMes").innerHTML=MONTHS.map(m=>`<option value="${m}">${MESES[+m.slice(5)]} de ${m.slice(0,4)}</option>`).join("");
 $("selMes").addEventListener("change",()=>{mes=$("selMes").value;store.set("mes",mes);
   const md=MD();if(!md.includes(dia))dia=md.includes(tk)?tk:md[0];
-  renderStrip();renderDia();renderPessoa();renderLocal();
+  renderStrip();renderDia();renderPessoa();renderLocal();renderRep();
   const s=$("strip").querySelector('[aria-pressed="true"]');if(s)s.scrollIntoView({block:"nearest",inline:"center"});});
 // Init
 dia=DATES.includes(tk)?tk:(DATES.includes(store.get("dia"))?store.get("dia"):DATES[0]);
 mes=dia==="2026-11-01"?"2026-10":dia.slice(0,7);$("selMes").value=mes;
 const sp=store.get("pessoa");if(sp&&NAMES.includes(sp))$("selPessoa").value=sp;
 const sl=store.get("local");if(sl&&LOCAIS.includes(sl))$("selLocal").value=sl;
-renderStrip();renderDia();renderPessoa();renderLocal();
+$("selRes").innerHTML=NAMES.map(n=>`<option>${esc(n)}</option>`).join("");
+{const sr=store.get("res");$("selRes").value=(sr&&NAMES.includes(sr))?sr:(NAMES.includes("GABRIELA")?"GABRIELA":NAMES[0]);}
+$("selRes").addEventListener("change",renderRep);
+renderStrip();renderDia();renderPessoa();renderLocal();renderRep();
 const hash=location.hash.slice(1);
-show(["pessoa","dia","local"].includes(hash)?hash:(store.get("aba")||"dia"));
+show(["pessoa","dia","local","report"].includes(hash)?hash:(store.get("aba")||"dia"));
 const sel=$("strip").querySelector('[aria-pressed="true"]');if(sel)sel.scrollIntoView({block:"nearest",inline:"center"});
 </script>
 
